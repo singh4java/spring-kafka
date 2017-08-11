@@ -169,6 +169,10 @@ public class KafkaTemplate<K, V> implements KafkaOperations<K, V> {
 		return doSend(producerRecord);
 	}
 
+	public ListenableFuture<SendResult<K, V>> send(ProducerRecord<K, V> record) {
+		return doSend(record);
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public ListenableFuture<SendResult<K, V>> send(Message<?> message) {
