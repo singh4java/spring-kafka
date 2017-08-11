@@ -25,6 +25,8 @@ ListenableFuture<SendResult<K, V>> send(String topic, int partition, V data);
 
 ListenableFuture<SendResult<K, V>> send(String topic, int partition, K key, V data);
 
+ListenableFuture<SendResult<K, V>> send(ProducerRecord<K, V> record);
+
 ListenableFuture<SendResult<K, V>> send(Message<?> message);
 
 Map<MetricName, ? extends Metric> metrics();
