@@ -314,11 +314,11 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		 */
 		private boolean paused;
 
-		@SuppressWarnings("unchecked")
+		@SuppressWarnings({"unchecked", "deprecation"})
 		ListenerConsumer(GenericMessageListener<?> listener, GenericAcknowledgingMessageListener<?> ackListener) {
 			Assert.state(!this.isAnyManualAck || !this.autoCommit,
 					"Consumer cannot be configured for auto commit for ackMode " + this.containerProperties.getAckMode());
-			@SuppressWarnings("deprecation") final Consumer<K, V> consumer =
+			final Consumer<K, V> consumer =
 					KafkaMessageListenerContainer.this.consumerFactory instanceof
 							org.springframework.kafka.core.ClientIdSuffixAware
 							? ((org.springframework.kafka.core.ClientIdSuffixAware<K, V>) KafkaMessageListenerContainer
