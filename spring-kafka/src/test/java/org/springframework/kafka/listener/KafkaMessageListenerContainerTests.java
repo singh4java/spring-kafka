@@ -268,22 +268,32 @@ public class KafkaMessageListenerContainerTests {
 		containerProps.setAckMode(AckMode.RECORD);
 		final CountDownLatch latch = new CountDownLatch(2);
 		MessageListener<Integer, String> messageListener = spy(
-			new MessageListener<Integer, String>() {
+				new MessageListener<Integer, String>() {
 
-				@Override
-				public void onMessage(ConsumerRecord<Integer, String> data) {
-					latch.countDown();
-					if (latch.getCount() == 0) {
-						records.clear();
+					@Override
+					public void onMessage(ConsumerRecord<Integer, String> data) {
+						latch.countDown();
+						if (latch.getCount() == 0) {
+							records.clear();
+						}
 					}
-				}
 
-			});
+				});
+
+		final CountDownLatch commitLatch = new CountDownLatch(2);
+
+		willAnswer(i -> {
+					commitLatch.countDown();
+					return null;
+				}
+		).given(consumer).commitSync(any(Map.class));
+
 		containerProps.setMessageListener(messageListener);
 		KafkaMessageListenerContainer<Integer, String> container =
 				new KafkaMessageListenerContainer<>(cf, containerProps);
 		container.start();
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(commitLatch.await(10, TimeUnit.SECONDS)).isTrue();
 		InOrder inOrder = inOrder(messageListener, consumer);
 		inOrder.verify(consumer).poll(1000);
 		inOrder.verify(messageListener).onMessage(any(ConsumerRecord.class));
