@@ -166,7 +166,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			Iterator<MetricName> metricIterator = metrics.keySet().iterator();
 			if (metricIterator.hasNext()) {
 				String clientId = metricIterator.next().tags().get("client-id");
-				return Collections.singletonMap(clientId, metrics);
+				return Collections.<String, Map<MetricName, ? extends Metric>>singletonMap(clientId, metrics);
 			}
 		}
 		return Collections.emptyMap();
