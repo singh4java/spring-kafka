@@ -62,6 +62,10 @@ public class KafkaAdmin implements ApplicationContextAware, SmartInitializingSin
 
 	private boolean fatalIfBrokerNotAvailable;
 
+	private boolean autoCreate = true;
+
+	private boolean initializingContext;
+
 	/**
 	 * Create an instance with an {@link AdminClient} based on the supplied
 	 * configuration.
@@ -94,6 +98,15 @@ public class KafkaAdmin implements ApplicationContextAware, SmartInitializingSin
 	}
 
 	/**
+	 * Set to false to suppress auto creation of topics during context initialization.
+	 * @param autoCreate boolean flag to indicate creation or not topics during context initialization
+	 * @see #initialize()
+	 */
+	public void setAutoCreate(boolean autoCreate) {
+		this.autoCreate = autoCreate;
+	}
+
+	/**
 	 * Get an unmodifiable copy of this admin's configuration.
 	 * @return the configuration map.
 	 */
@@ -103,43 +116,57 @@ public class KafkaAdmin implements ApplicationContextAware, SmartInitializingSin
 
 	@Override
 	public void afterSingletonsInstantiated() {
-		if (!initialize()) {
-			if (this.fatalIfBrokerNotAvailable) {
-				throw new IllegalStateException("Could not configure topics");
-			}
+		this.initializingContext = true;
+		if (this.autoCreate) {
+			initialize();
 		}
 	}
 
 	/**
 	 * Call this method to check/add topics; this might be needed if the broker was not
 	 * available when the application context was initialized, and
-	 * {@link #setFatalIfBrokerNotAvailable(boolean) fatalIfBrokenNotAvailable} is false.
+	 * {@link #setFatalIfBrokerNotAvailable(boolean) fatalIfBrokenNotAvailable} is false,
+	 * or {@link #setAutoCreate(boolean) autoCreate} was set to false.
 	 * @return true if successful.
+	 * @see #setFatalIfBrokerNotAvailable(boolean)
+	 * @see #setAutoCreate(boolean)
 	 */
 	public final boolean initialize() {
-		AdminClient adminClient = null;
-		try {
-			adminClient = AdminClient.create(this.config);
-		}
-		catch (Exception e) {
-			logger.error("Failed to create AdminClient", e);
-		}
-		if (adminClient != null) {
+		Collection<NewTopic> newTopics = this.applicationContext.getBeansOfType(NewTopic.class, false, false).values();
+		if (newTopics.size() > 0) {
+			AdminClient adminClient = null;
 			try {
-				if (this.applicationContext != null) {
-					addTopicsIfNeeded(adminClient,
-							this.applicationContext.getBeansOfType(NewTopic.class, false, false).values());
-				}
-				return true;
+				adminClient = AdminClient.create(this.config);
 			}
-			finally {
-				adminClient.close(this.closeTimeout, TimeUnit.SECONDS);
+			catch (Exception e) {
+				if (!this.initializingContext || this.fatalIfBrokerNotAvailable) {
+					throw new IllegalStateException("Could not create admin", e);
+				}
+			}
+			if (adminClient != null) {
+				try {
+					addTopicsIfNeeded(adminClient, newTopics);
+					return true;
+				}
+				catch (Throwable e) {
+					if (e instanceof Error) {
+						throw (Error) e;
+					}
+					if (!this.initializingContext || this.fatalIfBrokerNotAvailable) {
+						throw new IllegalStateException("Could not configure topics", e);
+					}
+				}
+				finally {
+					this.initializingContext = false;
+					adminClient.close(this.closeTimeout, TimeUnit.SECONDS);
+				}
 			}
 		}
+		this.initializingContext = false;
 		return false;
 	}
 
-	private void addTopicsIfNeeded(AdminClient adminClient, Collection<NewTopic> topics) {
+	private void addTopicsIfNeeded(AdminClient adminClient, Collection<NewTopic> topics) throws Throwable {
 		if (topics.size() > 0) {
 			final List<String> names = new ArrayList<>();
 			final Map<String, NewTopic> topicNameToTopic = new HashMap<>();
@@ -179,6 +206,7 @@ public class KafkaAdmin implements ApplicationContextAware, SmartInitializingSin
 				}
 				catch (ExecutionException e) {
 					logger.error("Failed to create topics", e.getCause());
+					throw e.getCause();
 				}
 			}
 		}
