@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 the original author or authors.
+ * Copyright 2016-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -291,7 +290,6 @@ public class ConcurrentMessageListenerContainerTests {
 	}
 
 	@Test
-	@Ignore // TODO https://github.com/spring-projects/spring-kafka/issues/62 using SYNC for avoidance
 	public void testManualCommitExisting() throws Exception {
 		this.logger.info("Start MANUAL_IMMEDIATE with Existing");
 		Map<String, Object> senderProps = KafkaTestUtils.producerProps(embeddedKafka);
@@ -314,7 +312,7 @@ public class ConcurrentMessageListenerContainerTests {
 			latch.countDown();
 		});
 		containerProps.setAckMode(AckMode.MANUAL_IMMEDIATE);
-
+		containerProps.setSyncCommits(false);
 		final CountDownLatch commits = new CountDownLatch(8);
 		final AtomicReference<Exception> exceptionRef = new AtomicReference<>();
 		containerProps.setCommitCallback((offsets, exception) -> {
