@@ -198,8 +198,10 @@ public abstract class AbstractMessageListenerContainer<K, V>
 		synchronized (this.lifecycleMonitor) {
 			if (!isRunning()) {
 				Assert.isTrue(
-						this.containerProperties.getMessageListener() instanceof GenericMessageListener,
-						"A " + GenericMessageListener.class.getName() + " implementation must be provided");
+						this.containerProperties.getMessageListener() instanceof MessageListener
+								|| this.containerProperties.getMessageListener() instanceof AcknowledgingMessageListener,
+						"Either a " + MessageListener.class.getName() + " or a "
+								+ AcknowledgingMessageListener.class.getName() + " must be provided");
 				doStart();
 			}
 		}
