@@ -196,12 +196,12 @@ public abstract class AbstractMessageListenerContainer<K, V>
 	@Override
 	public final void start() {
 		synchronized (this.lifecycleMonitor) {
-			Assert.isTrue(
-					this.containerProperties.getMessageListener() instanceof MessageListener
-							|| this.containerProperties.getMessageListener() instanceof AcknowledgingMessageListener,
-					"Either a " + MessageListener.class.getName() + " or a "
-							+ AcknowledgingMessageListener.class.getName() + " must be provided");
-			doStart();
+			if (!isRunning()) {
+				Assert.isTrue(
+						this.containerProperties.getMessageListener() instanceof GenericMessageListener,
+						"A " + GenericMessageListener.class.getName() + " implementation must be provided");
+				doStart();
+			}
 		}
 	}
 
@@ -209,24 +209,30 @@ public abstract class AbstractMessageListenerContainer<K, V>
 
 	@Override
 	public final void stop() {
-		final CountDownLatch latch = new CountDownLatch(1);
-		stop(new Runnable() {
-			@Override
-			public void run() {
-				latch.countDown();
+		synchronized (this.lifecycleMonitor) {
+			if (isRunning()) {
+				final CountDownLatch latch = new CountDownLatch(1);
+				doStop(new Runnable() {
+					@Override
+					public void run() {
+						latch.countDown();
+					}
+				});
+				try {
+					latch.await(this.containerProperties.getShutdownTimeout(), TimeUnit.MILLISECONDS);
+				}
+				catch (InterruptedException e) {
+				}
 			}
-		});
-		try {
-			latch.await(this.containerProperties.getShutdownTimeout(), TimeUnit.MILLISECONDS);
-		}
-		catch (InterruptedException e) {
 		}
 	}
 
 	@Override
 	public void stop(Runnable callback) {
 		synchronized (this.lifecycleMonitor) {
-			doStop(callback);
+			if (isRunning()) {
+				doStop(callback);
+			}
 		}
 	}
 
