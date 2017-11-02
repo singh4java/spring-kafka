@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledFuture;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -51,6 +52,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaResourceHolder;
 import org.springframework.kafka.core.ProducerFactoryUtils;
 import org.springframework.kafka.event.ListenerContainerIdleEvent;
+import org.springframework.kafka.event.NonResponsiveConsumerEvent;
 import org.springframework.kafka.listener.ConsumerSeekAware.ConsumerSeekCallback;
 import org.springframework.kafka.listener.config.ContainerProperties;
 import org.springframework.kafka.support.Acknowledgment;
@@ -58,6 +60,8 @@ import org.springframework.kafka.support.TopicPartitionInitialOffset;
 import org.springframework.kafka.support.TopicPartitionInitialOffset.SeekPosition;
 import org.springframework.kafka.transaction.KafkaTransactionManager;
 import org.springframework.scheduling.SchedulingAwareRunnable;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
@@ -249,6 +253,14 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		}
 	}
 
+	private void publishNonResponsiveConsumerEvent(long timeSinceLastPoll, Consumer<?, ?> consumer) {
+		if (getApplicationEventPublisher() != null) {
+			getApplicationEventPublisher().publishEvent(
+					new NonResponsiveConsumerEvent(KafkaMessageListenerContainer.this, timeSinceLastPoll,
+							getBeanName(), getAssignedPartitions(), consumer));
+		}
+	}
+
 	@Override
 	public String toString() {
 		return "KafkaMessageListenerContainer [id=" + getBeanName()
@@ -319,6 +331,10 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				.get(ConsumerConfig.GROUP_ID_CONFIG)
 				: this.containerProperties.getGroupId();
 
+		private final TaskScheduler taskScheduler;
+
+		private final ScheduledFuture<?> monitorTask;
+
 		private volatile Map<TopicPartition, OffsetMetadata> definedPartitions;
 
 		private volatile Collection<TopicPartition> assignedPartitions;
@@ -332,7 +348,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		@SuppressWarnings("unchecked")
 		ListenerConsumer(GenericMessageListener<?> listener, GenericAcknowledgingMessageListener<?> ackListener) {
 			Assert.state(!this.isAnyManualAck || !this.autoCommit,
-				"Consumer cannot be configured for auto commit for ackMode " + this.containerProperties.getAckMode());
+					"Consumer cannot be configured for auto commit for ackMode " + this.containerProperties.getAckMode());
 			this.theListener = listener == null ? ackListener : listener;
 			final Consumer<K, V> consumer = KafkaMessageListenerContainer.this.consumerFactory.createConsumer(
 					this.consumerGroupId, KafkaMessageListenerContainer.this.clientIdSuffix);
@@ -408,6 +424,32 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			}
 			else {
 				this.transactionTemplate = null;
+			}
+			if (this.containerProperties.getScheduler() != null) {
+				this.taskScheduler = this.containerProperties.getScheduler();
+			}
+			else {
+				ThreadPoolTaskScheduler threadPoolTaskScheduler = new ThreadPoolTaskScheduler();
+				threadPoolTaskScheduler.initialize();
+				this.taskScheduler = threadPoolTaskScheduler;
+			}
+			this.monitorTask = this.taskScheduler.scheduleAtFixedRate(
+					new Runnable() {
+
+						@Override
+						public void run() {
+							checkConsumer();
+						}
+
+					},
+					this.containerProperties.getMonitorInterval() * 1000);
+		}
+
+		protected void checkConsumer() {
+			long timeSinceLastPoll = System.currentTimeMillis() - last;
+			if (((float) timeSinceLastPoll) / (float) this.containerProperties.getPollTimeout()
+					> this.containerProperties.getNoPollThreshold()) {
+				publishNonResponsiveConsumerEvent(timeSinceLastPoll, this.consumer);
 			}
 		}
 
@@ -622,6 +664,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				ListenerConsumer.this.logger.error("No offset and no reset policy; stopping container");
 				KafkaMessageListenerContainer.this.stop();
 			}
+			this.monitorTask.cancel(true);
 			this.consumer.close();
 			if (this.logger.isInfoEnabled()) {
 				this.logger.info("Consumer stopped");
