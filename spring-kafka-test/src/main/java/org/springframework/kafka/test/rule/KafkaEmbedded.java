@@ -315,6 +315,7 @@ public class KafkaEmbedded extends ExternalResource implements KafkaRule, Initia
 		this.zookeeper = new EmbeddedZookeeper();
 	}
 
+	@Deprecated
 	public void bounce(int index, boolean waitForPropagation) {
 		this.kafkaServers.get(index).shutdown();
 		if (waitForPropagation) {
@@ -351,6 +352,7 @@ public class KafkaEmbedded extends ExternalResource implements KafkaRule, Initia
 
 	}
 
+	@Deprecated
 	public void bounce(int index) {
 		bounce(index, true);
 	}
@@ -382,6 +384,7 @@ public class KafkaEmbedded extends ExternalResource implements KafkaRule, Initia
 		});
 	}
 
+	@Deprecated
 	public void waitUntilSynced(String topic, int brokerId) {
 		long initialTime = System.currentTimeMillis();
 		boolean canExit = false;
