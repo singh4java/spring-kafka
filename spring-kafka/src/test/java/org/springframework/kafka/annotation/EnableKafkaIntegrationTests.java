@@ -252,6 +252,7 @@ public class EnableKafkaIntegrationTests {
 		template.send("annotated8", 0, 1, null);
 		template.flush();
 		assertThat(this.multiListener.latch1.await(60, TimeUnit.SECONDS)).isTrue();
+		assertThat(this.multiListener.latch2.await(60, TimeUnit.SECONDS)).isTrue();
 	}
 
 	@Test
@@ -859,16 +860,18 @@ public class EnableKafkaIntegrationTests {
 	@KafkaListener(id = "multi", topics = "annotated8")
 	static class MultiListenerBean {
 
-		private final CountDownLatch latch1 = new CountDownLatch(2);
+		private final CountDownLatch latch1 = new CountDownLatch(1);
+
+		private final CountDownLatch latch2 = new CountDownLatch(1);
 
 		@KafkaHandler
-		public void bar(String bar) {
+		public void bar(@Payload String bar) {
 			latch1.countDown();
 		}
 
 		@KafkaHandler
 		public void bar(@Payload(required = false) KafkaNull nul, @Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) int key) {
-			latch1.countDown();
+			latch2.countDown();
 		}
 
 		public void foo(String bar) {
