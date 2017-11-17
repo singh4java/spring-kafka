@@ -205,7 +205,7 @@ public class BatchMessagingMessageConverter implements BatchMessageConverter {
 	 */
 	protected Object convert(ConsumerRecord<?, ?> record, Type type) {
 		return this.recordConverter
-			.toMessage(record, null, null, ((ParameterizedType) type).getActualTypeArguments()[0]).getPayload();
+			.toMessage(record, null, ((ParameterizedType) type).getActualTypeArguments()[0]).getPayload();
 	}
 
 	/**
